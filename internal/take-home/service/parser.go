@@ -53,7 +53,7 @@ func (p *WeatherParser) parseLine(line string) (*model.WeatherData, error) {
 		return nil, fmt.Errorf("invalid format, expected 3 columns")
 	}
 
-	date, err := time.Parse("2002-02-05", parts[0])
+	date, err := time.Parse("2006-01-02", parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("invalid date: %w", err)
 	}
