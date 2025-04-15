@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,6 +20,10 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
+
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("Note: .env file not found, using environment variables")
+	}
 	// Load .env properties
 	port := os.Getenv("PORT")
 	if port == "" {
