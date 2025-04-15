@@ -66,36 +66,41 @@ func NewMongoDBRepository(client *mongo.Client) *MongoDBRepository {
 }
 
 func ensureIndexes(ctx context.Context, col *mongo.Collection) {
+	// ensure indexes and avoid duplicates
 	indexView := col.Indexes()
-
-	// Check if index already exists, otherwise create it
-
-	cur, err := indexView.List(ctx)
+	cursor, err := indexView.List(ctx)
 	if err != nil {
 		fmt.Printf("Failed to list indexes: %v\n", err)
 		return
 	}
-	defer cur.Close(ctx)
+	defer cursor.Close(ctx)
 
-	var existingIndexes []bson.M
-	if err := cur.All(ctx, &existingIndexes); err != nil {
-		fmt.Printf("Failed to decode indexes: %v\n", err)
-		return
-	}
+	var indexExists bool
+	for cursor.Next(ctx) {
+		var index bson.M
+		if err := cursor.Decode(&index); err != nil {
+			fmt.Printf("Failed to decode index: %v\n", err)
+			continue
+		}
 
-	indexExists := false
-	for _, idx := range existingIndexes {
-		if idx["name"] == dateIndexName {
+		if name, ok := index["name"].(string); ok && name == dateIndexName {
 			indexExists = true
 			break
 		}
 	}
 
+	// create index if it doesn't exist and set unique constraint
 	if !indexExists {
-		indexView.CreateOne(ctx, mongo.IndexModel{
-			Keys:    bson.D{{Key: "date", Value: 1}},
-			Options: options.Index().SetName(dateIndexName).SetUnique(true),
+		_, err := indexView.CreateOne(ctx, mongo.IndexModel{
+			Keys: bson.D{{Key: "date", Value: 1}},
+			Options: options.Index().
+				SetName(dateIndexName).
+				SetUnique(true),
 		})
+
+		if err != nil {
+			fmt.Printf("Failed to create index: %v\n", err)
+		}
 	}
 }
 
@@ -189,11 +194,24 @@ func (r *MongoDBRepository) InsertWeatherData(ctx context.Context, data any) err
 	insertCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := r.collection.InsertOne(insertCtx, data)
-	if err != nil {
-		return fmt.Errorf("insert into collection '%s' failed: %w", r.collection.Name(), err)
+	// mormalize date to midnight UTC for consistency
+	if weatherData, ok := data.(*model.WeatherData); ok {
+		weatherData.Date = time.Date(
+			weatherData.Date.Year(),
+			weatherData.Date.Month(),
+			weatherData.Date.Day(),
+			0, 0, 0, 0,
+			time.UTC,
+		)
+		filter := bson.M{"date": weatherData.Date}
+		update := bson.M{"$set": weatherData}
+		opts := options.UpdateOne().SetUpsert(true)
+		if _, err := r.collection.UpdateOne(insertCtx, filter, update, opts); err != nil {
+			return fmt.Errorf("failed to upsert data into collection '%s': %w", r.collection.Name(), err)
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("invalid data type, expected *model.WeatherData")
 }
 
 func (r *MongoDBRepository) CloseConnection(ctx context.Context) error {
