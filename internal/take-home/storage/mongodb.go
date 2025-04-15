@@ -94,7 +94,7 @@ func ensureIndexes(ctx context.Context, col *mongo.Collection) {
 	if !indexExists {
 		indexView.CreateOne(ctx, mongo.IndexModel{
 			Keys:    bson.D{{Key: "date", Value: 1}},
-			Options: options.Index().SetName(dateIndexName),
+			Options: options.Index().SetName(dateIndexName).SetUnique(true),
 		})
 	}
 }
