@@ -10,6 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
+	"maps"
+
 	"github.com/francescorizzello94/senior-fullstack-engineer-takehome/internal/take-home/model"
 )
 
@@ -116,7 +118,7 @@ type QueryOptions struct {
 // return safe defaults
 func DefaultQueryOptions() *QueryOptions {
 	return &QueryOptions{
-		Projection: bson.M{"_id": 0}, // Exclude ID by default, non-informative
+		Projection: nil, // default to nil, no projection
 		Sort:       bson.D{{Key: "date", Value: 1}},
 	}
 }
@@ -153,7 +155,7 @@ func (r *MongoDBRepository) queryWeatherData(
 	filter bson.M,
 	opts ...*QueryOptions,
 ) ([]*model.WeatherData, error) {
-	findCtx, cancel := context.WithTimeout(ctx, 15*time.Second) // increased timeout for potentially large datasets
+	findCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	// apply options or fallback to default
@@ -167,8 +169,18 @@ func (r *MongoDBRepository) queryWeatherData(
 		SetBatchSize(1000)
 
 	if queryOpts.Projection != nil {
-		findOptions.SetProjection(queryOpts.Projection)
+		// create copy of the projection map
+		proj := bson.M{}
+		maps.Copy(proj, queryOpts.Projection)
+		// forced date field inclusion
+		proj["date"] = 1
+		// _id is excluded unless explicitly included
+		if _, exists := proj["_id"]; !exists {
+			proj["_id"] = 0
+		}
+		findOptions.SetProjection(proj)
 	}
+
 	if queryOpts.Skip != nil {
 		findOptions.SetSkip(*queryOpts.Skip)
 	}

@@ -80,15 +80,18 @@ func buildMongoQueryOptions(opts ...*QueryOptions) *storage.QueryOptions {
 		Sort: bson.D{{Key: "date", Value: 1}},
 	}
 
-	// projection
+	// handle field projection conservatively
+	// only include fields explicitly requested and if no fields are specified, default to nil (no projection)
 	if len(serviceOpts.Fields) > 0 {
-		projection := bson.M{"_id": 0}
+		projection := bson.M{}
 		for _, field := range serviceOpts.Fields {
 			projection[field] = 1
 		}
+		// always include the "date" field (and set _id exclusion explicitly)
+		projection["date"] = 1
+		projection["_id"] = 0
+
 		mongoOpts.Projection = projection
-	} else if serviceOpts.ExcludeID {
-		mongoOpts.Projection = bson.M{"_id": 0}
 	}
 
 	// pagination

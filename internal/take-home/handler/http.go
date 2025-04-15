@@ -78,6 +78,38 @@ func (h *HTTPHandler) ingestWeatherData(w http.ResponseWriter, r *http.Request) 
 	respondWithJSON(w, http.StatusCreated, data)
 }
 
+// create a new slice with only the requested fields included
+func filterFields(data []*model.WeatherData, fields []string) []map[string]any {
+	fieldMap := make(map[string]bool)
+	for _, f := range fields {
+		fieldMap[f] = true
+	}
+
+	// always include date field
+	fieldMap["date"] = true
+
+	result := make([]map[string]any, len(data))
+	for i, item := range data {
+		filtered := make(map[string]any)
+
+		filtered["date"] = item.Date
+
+		// only include requested fields
+		if fieldMap["temperature"] {
+			filtered["temperature"] = item.Temperature
+		}
+		if fieldMap["humidity"] {
+			filtered["humidity"] = item.Humidity
+		}
+		// here more fields would appear as the data model grows
+		// projection would be espcially useful for large documents with many fields
+
+		result[i] = filtered
+	}
+
+	return result
+}
+
 func (h *HTTPHandler) getWeatherByDate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -101,6 +133,15 @@ func (h *HTTPHandler) getWeatherByDate(w http.ResponseWriter, r *http.Request) {
 
 	if len(data) == 0 {
 		respondWithError(w, http.StatusNotFound, "No data found for specified date")
+		return
+	}
+
+	// check if filtering fields is needed
+	fieldsParam := r.URL.Query().Get("fields")
+	if fieldsParam != "" {
+		fields := splitCommaSeparated(fieldsParam)
+		filteredData := filterFields(data, fields)
+		respondWithJSON(w, http.StatusOK, filteredData)
 		return
 	}
 
@@ -140,6 +181,15 @@ func (h *HTTPHandler) getWeatherByDateRange(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// check if filtering fields is needed
+	fieldsParam := r.URL.Query().Get("fields")
+	if fieldsParam != "" {
+		fields := splitCommaSeparated(fieldsParam)
+		filteredData := filterFields(data, fields)
+		respondWithJSON(w, http.StatusOK, filteredData)
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, data)
 }
 
@@ -168,14 +218,17 @@ func buildQueryOptionsFromRequest(r *http.Request) *service.QueryOptions {
 // helper function to split a comma-separated string and trim spaces
 // important for performance when documents grow large and many fields are requested
 
-func splitCommaSeparated(input string) []string {
-	var result []string
-	for _, field := range strings.Split(input, ",") {
-		if trimmed := strings.TrimSpace(field); trimmed != "" {
-			result = append(result, trimmed)
-		}
+func splitCommaSeparated(s string) []string {
+	if s == "" {
+		return nil
 	}
-	return result
+
+	parts := strings.Split(s, ",")
+	for i, part := range parts {
+		parts[i] = strings.TrimSpace(part)
+	}
+
+	return parts
 }
 
 func respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
