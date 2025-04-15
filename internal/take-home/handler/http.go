@@ -14,16 +14,16 @@ import (
 )
 
 type HTTPHandler struct {
-	ingestSvc *service.IngestService
-	querySvc  *service.QueryService
-	wsHub     *WebSocketHub
+	ingestSvc service.IngestServiceInterface
+	querySvc  service.QueryServiceInterface
+	wsHub     WebSocketHub
 	logger    *zap.Logger
 }
 
 func NewHTTPHandler(
-	ingestSvc *service.IngestService,
-	querySvc *service.QueryService,
-	wsHub *WebSocketHub,
+	ingestSvc service.IngestServiceInterface,
+	querySvc service.QueryServiceInterface,
+	wsHub WebSocketHub,
 	logger *zap.Logger,
 ) *HTTPHandler {
 	return &HTTPHandler{
@@ -58,6 +58,13 @@ func (h *HTTPHandler) RegisterRoutes(router *mux.Router) {
 
 func (h *HTTPHandler) ingestWeatherData(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		h.logger.Warn("Invalid content type", zap.String("contentType", contentType))
+		respondWithError(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+		return
+	}
 
 	var data model.WeatherData
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
