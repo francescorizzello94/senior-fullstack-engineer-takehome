@@ -48,7 +48,7 @@ var upgrader = websocket.Upgrader{
 	*/
 }
 
-type WebSocketHub struct {
+type WebSocketHubImpl struct {
 	clients    map[*websocket.Conn]struct{}
 	clientsMu  sync.RWMutex
 	broadcast  chan *model.WeatherData
@@ -57,9 +57,9 @@ type WebSocketHub struct {
 	logger     *zap.Logger
 }
 
-func NewWebSocketHub(logger *zap.Logger) *WebSocketHub {
-	return &WebSocketHub{
-		broadcast:  make(chan *model.WeatherData, 256), // buffered channel to deal with potential bursts of messages
+func NewWebSocketHub(logger *zap.Logger) WebSocketHub {
+	return &WebSocketHubImpl{
+		broadcast:  make(chan *model.WeatherData, 256),
 		register:   make(chan *websocket.Conn),
 		unregister: make(chan *websocket.Conn),
 		clients:    make(map[*websocket.Conn]struct{}),
@@ -67,7 +67,7 @@ func NewWebSocketHub(logger *zap.Logger) *WebSocketHub {
 	}
 }
 
-func (h *WebSocketHub) Run(ctx context.Context) {
+func (h *WebSocketHubImpl) Run(ctx context.Context) {
 	h.logger.Info("Starting WebSocket hub")
 	defer h.logger.Info("WebSocket hub stopped")
 
@@ -92,7 +92,7 @@ func (h *WebSocketHub) Run(ctx context.Context) {
 	}
 }
 
-func (h *WebSocketHub) safeRemoveClient(conn *websocket.Conn) {
+func (h *WebSocketHubImpl) safeRemoveClient(conn *websocket.Conn) {
 	h.clientsMu.Lock()
 	defer h.clientsMu.Unlock()
 
@@ -103,7 +103,7 @@ func (h *WebSocketHub) safeRemoveClient(conn *websocket.Conn) {
 	}
 }
 
-func (h *WebSocketHub) broadcastToClients(data *model.WeatherData) {
+func (h *WebSocketHubImpl) broadcastToClients(data *model.WeatherData) {
 	h.clientsMu.RLock()
 	defer h.clientsMu.RUnlock()
 
@@ -119,12 +119,12 @@ func (h *WebSocketHub) broadcastToClients(data *model.WeatherData) {
 	}
 }
 
-func (h *WebSocketHub) writeData(conn *websocket.Conn, data *model.WeatherData) error {
+func (h *WebSocketHubImpl) writeData(conn *websocket.Conn, data *model.WeatherData) error {
 	conn.SetWriteDeadline(time.Now().Add(writeWait))
 	return conn.WriteJSON(data)
 }
 
-func (h *WebSocketHub) cleanup() {
+func (h *WebSocketHubImpl) cleanup() {
 	h.clientsMu.Lock()
 	defer h.clientsMu.Unlock()
 
@@ -134,7 +134,7 @@ func (h *WebSocketHub) cleanup() {
 	h.logger.Info("Cleaned up all WebSocket connections")
 }
 
-func (h *WebSocketHub) HandleConnection(w http.ResponseWriter, r *http.Request) {
+func (h *WebSocketHubImpl) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.logger.Error("Upgrade failed", zap.Error(err))
@@ -164,7 +164,7 @@ func (h *WebSocketHub) HandleConnection(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (h *WebSocketHub) heartbeat(conn *websocket.Conn) {
+func (h *WebSocketHubImpl) heartbeat(conn *websocket.Conn) {
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop() // immediately release resources rather than waiting for the GC to operate through the NewTicker() instance
 
@@ -176,7 +176,7 @@ func (h *WebSocketHub) heartbeat(conn *websocket.Conn) {
 	}
 }
 
-func (h *WebSocketHub) Broadcast(data *model.WeatherData) {
+func (h *WebSocketHubImpl) Broadcast(data *model.WeatherData) {
 	select {
 	case h.broadcast <- data:
 	default:
