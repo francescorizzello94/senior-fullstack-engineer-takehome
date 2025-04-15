@@ -15,7 +15,7 @@ run:
 	go run ./cmd/take-home/main.go
 
 test:
-	go test ./...
+	go test -v ./... ./test/...
 
 clean:
 	go clean
