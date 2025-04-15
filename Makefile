@@ -17,6 +17,9 @@ run:
 test:
 	go test -v ./... ./test/...
 
+benchmark:
+	go test -bench=. -benchmem ./test/...
+
 clean:
 	go clean
 	rm -rf bin/
