@@ -48,7 +48,7 @@ func main() {
 	repo := storage.NewMongoDBRepository(mongoClient)
 
 	// init services
-	ingestService := service.NewIngestService(*repo)
+	ingestService := service.NewIngestService(repo)
 	queryService := service.NewQueryService(repo)
 
 	// init WebSocket

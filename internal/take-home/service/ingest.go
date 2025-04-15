@@ -10,11 +10,11 @@ import (
 )
 
 type IngestService struct {
-	repo   storage.MongoDBRepository
+	repo   storage.WeatherRepository
 	parser *WeatherParser
 }
 
-func NewIngestService(repo storage.MongoDBRepository) *IngestService {
+func NewIngestService(repo storage.WeatherRepository) *IngestService {
 	return &IngestService{
 		repo:   repo,
 		parser: NewWeatherParser(),
