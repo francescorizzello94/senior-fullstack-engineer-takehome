@@ -218,3 +218,50 @@ func TestHTTPHandler_IngestWeatherData(t *testing.T) {
 
 	})
 }
+
+func BenchmarkHTTPHandler_GetWeatherByDate(b *testing.B) {
+	th := setupTestHandler()
+	router := mux.NewRouter()
+	th.RegisterRoutes(router)
+
+	testDate := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	expectedData := []*model.WeatherData{
+		{
+			Date:        testDate,
+			Temperature: 22.5,
+			Humidity:    75.5,
+		},
+	}
+
+	th.QuerySvc.On("GetByDate", mock.Anything, testDate, mock.Anything).Return(expectedData, nil).Maybe()
+
+	req := httptest.NewRequest("GET", "/api/v1/weather/2023-01-01", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+	}
+}
+
+func BenchmarkHTTPHandler_IngestWeatherData(b *testing.B) {
+	th := setupTestHandler()
+	router := mux.NewRouter()
+	th.RegisterRoutes(router)
+
+	th.IngestSvc.On("IngestSingle", mock.Anything, mock.Anything).Return(nil).Maybe()
+	th.WSHub.On("Broadcast", mock.Anything).Maybe()
+
+	body := `{"date":"2023-01-01T00:00:00Z","temperature":22.5,"humidity":75.5}`
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest("POST", "/api/v1/weather", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+	}
+}
